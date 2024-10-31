@@ -161,3 +161,20 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 node_modules
+
+# Next.js build output
+.next/
+
+# Tailwind CSS build output
+*.css.map
+
+# Other common files
+.DS_Store
+.vscode/
+*.log
+
+# Optional: Ignore environment variable files if they contain sensitive information
+.env
+.env.local
+.env.development.local
+.env.production.local
