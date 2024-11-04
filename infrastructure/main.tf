@@ -5,34 +5,68 @@ terraform {
       version = "~> 5.0"
     }
   }
+}
 
-  backend "s3" {
-    bucket         	   = "boltbay-infra-tfstate"
-    key              	 = "state/terraform.tfstate"
-    region         	   = "ap-southeast-2"
-    encrypt        	   = true
-    dynamodb_table     = "boltbay_tf_lockid"
-  }
+variable "environment" {
+  type        = string
+  description = "Environment name (dev, staging, prod)"
+}
+
+variable "project" {
+  type        = string
+  description = "Project name"
+  default     = "boltbay"
 }
 
 variable "default_region" {
-  type = string
+  type    = string
   default = "ap-southeast-2"
 }
 
-provider "aws" {
-  region = var.default_region
+module "vpc" {
+  source = "./modules/vpc"
+
+  environment = var.environment
+  project     = var.project
 }
 
-provider "aws" {
-  alias = "us-east-1"
-  region = "us-east-1"
+module "security" {
+  source = "./modules/security"
+  
+  environment = var.environment
+  project     = var.project
+  vpc_id      = module.vpc.vpc_id
 }
 
-resource "aws_s3_bucket" "test_bucket" {
-  bucket = "boltbay-test"
-  tags = {
-    created_by  = "terraform"
-    project     = "boltbay"
-  }
+module "ecs" {
+  source = "./modules/ecs"
+  
+  environment = var.environment
+  project     = var.project
+  vpc_id      = module.vpc.vpc_id
+  # 其他需要的变量
+}
+
+module "s3" {
+  source = "./modules/s3"
+  
+  environment = var.environment
+  project     = var.project
+}
+
+# 输出重要信息
+output "vpc_id" {
+  value = module.vpc.vpc_id
+}
+
+output "public_subnet_ids" {
+  value = module.vpc.public_subnet_ids
+}
+
+output "private_subnet_ids" {
+  value = module.vpc.private_subnet_ids
+}
+
+output "s3_bucket_name" {
+  value = module.s3.bucket_name
 }
