@@ -44,7 +44,7 @@ module "ecs" {
   environment = var.environment
   project     = var.project
   vpc_id      = module.vpc.vpc_id
-  # 其他需要的变量
+  # Other required variables
 }
 
 module "s3" {
@@ -54,7 +54,7 @@ module "s3" {
   project     = var.project
 }
 
-# 输出重要信息
+# Output key information
 output "vpc_id" {
   value = module.vpc.vpc_id
 }

@@ -1,4 +1,3 @@
-# infrastructure/environments/dev/variables.tf
 variable "environment" {
   type    = string
   default = "dev"
@@ -14,7 +13,7 @@ variable "default_region" {
   default = "ap-southeast-2"
 }
 
-# VPC 配置变量
+# VPC configuration variables
 variable "vpc_cidr" {
   type    = string
   default = "10.0.0.0/16"

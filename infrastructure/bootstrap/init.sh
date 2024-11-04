@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# 确保在正确的目录
+# Ensure in the correct directory
 cd "$(dirname "$0")"
 
-# 初始化 Terraform
+# Initialize Terraform
 echo "Initializing Terraform..."
 terraform init
 
-# 创建基础设施
+# Create bootstrap infrastructure
 echo "Creating bootstrap infrastructure..."
 terraform apply -auto-approve
 
-# 输出提示信息
+# Output prompt information
 echo "Bootstrap complete! You can now use these resources in your Terraform configurations."
