@@ -18,7 +18,7 @@ variable "project" {
   default     = "boltbay"
 }
 
-variable "default_region" {
+variable "default_region" { 
   type    = string
   default = "ap-southeast-2"
 }

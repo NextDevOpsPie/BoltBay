@@ -1,3 +1,5 @@
+#init_infrastructure.sh
+
 #!/bin/bash
 
 # Create basic directory structure

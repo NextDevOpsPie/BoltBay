@@ -1,3 +1,5 @@
+#infrastructure/environments/staging/versions.tf
+
 terraform {
   required_providers {
     aws = {

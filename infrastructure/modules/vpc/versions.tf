@@ -1,3 +1,5 @@
+#infrastructure/modules/vpc/versions.tf
+
 variable "environment" {
   description = "Environment name"
   type        = string
