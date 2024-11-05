@@ -21,79 +21,138 @@ on:
       - 'infrastructure/**'
 
 # Define jobs
+# jobs:
+#   terraform:
+#     name: 'Terraform'
+#     runs-on: ubuntu-latest # Use latest Ubuntu runner
+
+#     # Environment variables configuration
+#     env:
+#       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }} # AWS credentials
+#       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#       AWS_REGION: ap-southeast-2 # AWS region
+#       # Set workspace based on branch
+#       TF_WORKSPACE: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/production' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}
+
+#     # Set default working directory based on branch
+#     defaults:
+#       run:
+#         working-directory: infrastructure/environments/${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/production' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}
+
+#     # Define step-by-step actions
+#     steps:
+#       # Step 1: Check out repository code
+#       - name: Checkout
+#         uses: actions/checkout@v2
+
+#       # Step 2: Install and configure Terraform
+#       - name: Setup Terraform
+#         uses: hashicorp/setup-terraform@v1
+#         with:
+#           terraform_version: 1.0.0 # Specify Terraform version
+
+#       # Step 3: Check Terraform formatting
+#       - name: Terraform Format
+#         run: terraform fmt -check
+#         continue-on-error: true # Continue even if formatting check fails
+
+#       #   # Step 4: Initialize Terraform working directory
+#       # - name: Terraform Init
+#       #   id: init
+#       #   run: terraform init -input=false
+
+#       # - name: Ensure Terraform Workspace Exists
+#       #   run: |
+#       #     terraform workspace list | grep -q "\b${TF_WORKSPACE}\b" || terraform workspace new ${TF_WORKSPACE}
+
+#       # # Step 4: Initialize Terraform working directory without TF_WORKSPACE
+#       # - name: Terraform Init
+#       #   id: init
+#       #   run: terraform init -input=false
+
+#       # Step 4: Clean up any existing Terraform directories
+#       - name: Clean .terraform directory
+#         run: rm -rf .terraform
+
+#       # Step 5: Initialize Terraform working directory
+#       - name: Terraform Init
+#         id: init
+#         run: terraform init -input=false -reconfigure
+
+#      # Step 6: Set TF_WORKSPACE after initialization
+#       - name: Set TF_WORKSPACE
+#         run: |
+#           echo "TF_WORKSPACE=${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/production' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}" >> $GITHUB_ENV
+
+#      # Step 7: Ensure Terraform Workspace Exists and Select It
+#       - name: Ensure Terraform Workspace Exists
+#         run: |
+#           terraform workspace list | grep -q "^${TF_WORKSPACE}$" || terraform workspace new ${TF_WORKSPACE}
+#           terraform workspace select ${TF_WORKSPACE}
+
+#       # Step 5: Validate Terraform configuration
+#       - name: Terraform Validate
+#         id: validate
+#         run: terraform validate
+
+# ... [previous configuration]
+
 jobs:
   terraform:
     name: 'Terraform'
-    runs-on: ubuntu-latest # Use latest Ubuntu runner
+    runs-on: ubuntu-latest
 
-    # Environment variables configuration
+    # Remove TF_WORKSPACE from job-level env
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }} # AWS credentials
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ap-southeast-2 # AWS region
-      # Set workspace based on branch
-      TF_WORKSPACE: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/production' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}
+      AWS_REGION: ap-southeast-2
 
-    # Set default working directory based on branch
     defaults:
       run:
         working-directory: infrastructure/environments/${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/production' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}
 
-    # Define step-by-step actions
     steps:
-      # Step 1: Check out repository code
       - name: Checkout
         uses: actions/checkout@v2
 
-      # Step 2: Install and configure Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
         with:
-          terraform_version: 1.0.0 # Specify Terraform version
+          terraform_version: 1.0.0
 
-      # Step 3: Check Terraform formatting
       - name: Terraform Format
+        id: fmt
         run: terraform fmt -check
-        continue-on-error: true # Continue even if formatting check fails
+        continue-on-error: true
 
-      #   # Step 4: Initialize Terraform working directory
-      # - name: Terraform Init
-      #   id: init
-      #   run: terraform init -input=false
-
-      # - name: Ensure Terraform Workspace Exists
-      #   run: |
-      #     terraform workspace list | grep -q "\b${TF_WORKSPACE}\b" || terraform workspace new ${TF_WORKSPACE}
-
-      # # Step 4: Initialize Terraform working directory without TF_WORKSPACE
-      # - name: Terraform Init
-      #   id: init
-      #   run: terraform init -input=false
-
-      # Step 4: Clean up any existing Terraform directories
+      # Step: Clean up any existing Terraform directories
       - name: Clean .terraform directory
         run: rm -rf .terraform
 
-      # Step 5: Initialize Terraform working directory
+      # Step: Unset TF_WORKSPACE and Initialize Terraform
       - name: Terraform Init
         id: init
+        env:
+          TF_WORKSPACE: default # Ensure TF_WORKSPACE is set to default
         run: terraform init -input=false -reconfigure
 
-     # Step 6: Set TF_WORKSPACE after initialization
+      # Step: Set TF_WORKSPACE after initialization
       - name: Set TF_WORKSPACE
         run: |
           echo "TF_WORKSPACE=${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/production' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}" >> $GITHUB_ENV
 
-     # Step 7: Ensure Terraform Workspace Exists and Select It
+      # Step: Ensure Terraform Workspace Exists and Select It
       - name: Ensure Terraform Workspace Exists
         run: |
           terraform workspace list | grep -q "^${TF_WORKSPACE}$" || terraform workspace new ${TF_WORKSPACE}
           terraform workspace select ${TF_WORKSPACE}
 
-      # Step 5: Validate Terraform configuration
       - name: Terraform Validate
         id: validate
         run: terraform validate
+
+      # ... [rest of your steps]
 
       # Step 6: Generate Terraform plan (only on pull requests)
       - name: Terraform Plan
