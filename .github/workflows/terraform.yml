@@ -47,13 +47,13 @@ jobs:
    steps:
      # Step 1: Check out repository code
      - name: Checkout
-       uses: actions/checkout@v2
+       uses: actions/checkout@v3
 
      # Step 2: Install and configure Terraform
      - name: Setup Terraform
-       uses: hashicorp/setup-terraform@v1
+       uses: hashicorp/setup-terraform@v2
        with:
-         terraform_version: 1.0.0 # Specify Terraform version
+         terraform_version: 1.9.8 # Specify Terraform version
 
      # Step 3: Check Terraform formatting
      - name: Terraform Format
