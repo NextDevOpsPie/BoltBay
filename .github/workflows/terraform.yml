@@ -83,8 +83,14 @@ jobs:
       - name: Terraform Validate
         id: validate
         run: |
-          terraform validate
-          echo "validate_output=$(terraform validate -no-color)" >> $GITHUB_OUTPUT
+          if terraform validate -no-color; then
+            echo "status=valid" >> $GITHUB_OUTPUT
+            echo "message=Success! The configuration is valid." >> $GITHUB_OUTPUT
+          else
+            echo "status=invalid" >> $GITHUB_OUTPUT
+            echo "message=Error! The configuration is invalid." >> $GITHUB_OUTPUT
+            exit 1
+          fi
 
       # Step 7: Generate Terraform plan (only on pull requests)
       - name: Terraform Plan
@@ -111,7 +117,8 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           PLAN_OUTPUT: ${{ steps.plan.outputs.plan_output }}
-          VALIDATE_OUTPUT: ${{ steps.validate.outputs.validate_output }}
+          VALIDATE_STATUS: ${{ steps.validate.outputs.status }}
+          VALIDATE_MESSAGE: ${{ steps.validate.outputs.message }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -119,13 +126,8 @@ jobs:
               '#### Terraform Format and Style 🖌',
               '#### Terraform Initialization ⚙️',
               '#### Terraform Validation 🤖',
-              '<details><summary>Show Validation</summary>',
               '',
-              '```',
-              process.env.VALIDATE_OUTPUT,
-              '```',
-              '',
-              '</details>',
+              `**${process.env.VALIDATE_MESSAGE}**`,
               '',
               '#### Terraform Plan 📖',
               '<details><summary>Show Plan</summary>',
