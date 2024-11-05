@@ -1,0 +1,117 @@
+# Terraform CI/CD workflow for infrastructure management
+name: 'Terraform CI/CD'
+
+# Define workflow triggers
+on:
+  push: # Trigger on push events
+    branches: # Only for these branches
+      - develop
+      - staging
+      - production
+      - main
+    paths: # Only when changes occur in infrastructure directory
+      - 'infrastructure/**'
+  pull_request: # Trigger on pull request events
+    branches: # For PRs targeting these branches
+      - develop
+      - staging
+      - production
+      - main
+    paths:
+      - 'infrastructure/**'
+
+# Define jobs
+jobs:
+  terraform:
+    name: 'Terraform'
+    runs-on: ubuntu-latest # Use latest Ubuntu runner
+
+    # Environment variables configuration
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }} # AWS credentials
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ap-southeast-2 # AWS region
+      # Set workspace based on branch
+      TF_WORKSPACE: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/production' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}
+
+    # Set default working directory based on branch
+    defaults:
+      run:
+        working-directory: infrastructure/environments/${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/production' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}
+
+    # Define step-by-step actions
+    steps:
+      # Step 1: Check out repository code
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      # Step 2: Install and configure Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: 1.0.0 # Specify Terraform version
+
+      # Step 3: Check Terraform formatting
+      - name: Terraform Format
+        run: terraform fmt -check
+        continue-on-error: true # Continue even if formatting check fails
+
+      # Step 4: Initialize Terraform working directory
+      - name: Terraform Init
+        id: init
+        run: terraform init
+
+      # Step 5: Validate Terraform configuration
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate
+
+      # Step 6: Generate Terraform plan (only on pull requests)
+      - name: Terraform Plan
+        id: plan
+        if: github.event_name == 'pull_request'
+        run: terraform plan -no-color
+        continue-on-error: true
+
+      # Step 7: Add comments to pull request
+      - name: Update Pull Request
+        uses: actions/github-script@v6
+        if: github.event_name == 'pull_request'
+        env:
+          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            # Generate comment content with execution results
+            const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+            #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+            #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+            #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+
+            *Pushed by: @${{ github.actor }}, Environment: \`${process.env.TF_WORKSPACE}\`*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+      # Step 8: Apply Terraform changes based on branch
+      - name: Terraform Apply
+        if: github.event_name == 'push' # Only execute on push events
+        run: |
+          # Apply changes based on the target branch
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "Applying changes to MAIN (PRODUCTION)"
+            terraform apply -auto-approve
+          elif [[ "${{ github.ref }}" == "refs/heads/production" ]]; then
+            echo "Applying changes to PRODUCTION environment"
+            terraform apply -auto-approve
+          elif [[ "${{ github.ref }}" == "refs/heads/staging" ]]; then
+            echo "Applying changes to STAGING environment"
+            terraform apply -auto-approve
+          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            echo "Applying changes to DEV environment"
+            terraform apply -auto-approve
+          fi
