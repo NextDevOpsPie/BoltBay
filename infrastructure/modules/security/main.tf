@@ -5,14 +5,17 @@ resource "aws_security_group" "main" {
   description = "Main security group for ${var.environment}"
   vpc_id      = var.vpc_id
 
-  tags = {
-    Name        = "${var.environment}-sg"
-    Environment = var.environment
-    Description = "Security groups for ${var.environment} environment"
-  }
+  tags = merge(
+    {
+      Name        = "${var.environment}-sg"
+      Environment = var.environment
+      Description = "Security groups for ${var.environment} environment"
+    },
+    var.tags
+  )
 }
 
-# 默认入站规则
+# Default inbound rule
 resource "aws_security_group_rule" "ingress_http" {
   type              = "ingress"
   from_port         = 80
@@ -31,7 +34,7 @@ resource "aws_security_group_rule" "ingress_https" {
   security_group_id = aws_security_group.main.id
 }
 
-# 默认出站规则
+# Default outbound rule
 resource "aws_security_group_rule" "egress" {
   type              = "egress"
   from_port         = 0
