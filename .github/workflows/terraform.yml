@@ -56,27 +56,42 @@ jobs:
        run: terraform fmt -check
        continue-on-error: true # Continue even if formatting check fails
 
-     # Modified Init and Workspace steps
+     # Step 4: Initialize Terraform
      - name: Terraform Init
        id: init
        run: |
          terraform init -input=false
-         terraform workspace select default || terraform workspace new default
-         terraform workspace select ${TF_WORKSPACE} || terraform workspace new ${TF_WORKSPACE}
+         echo "Workspace: ${TF_WORKSPACE}"
 
-     # Step 5: Validate Terraform configuration
+     # Step 5: Setup Terraform Workspace
+     - name: Setup Terraform Workspace
+       run: |
+         # 列出现有工作区
+         WORKSPACES=$(terraform workspace list)
+         
+         # 检查目标工作区是否存在
+         if echo "$WORKSPACES" | grep -q " ${TF_WORKSPACE}"; then
+           echo "Workspace ${TF_WORKSPACE} already exists"
+         else
+           echo "Creating new workspace: ${TF_WORKSPACE}"
+           terraform workspace new ${TF_WORKSPACE}
+         fi
+         
+         echo "Current workspace: $(terraform workspace show)"
+
+     # Step 6: Validate Terraform configuration
      - name: Terraform Validate
        id: validate
        run: terraform validate
 
-     # Step 6: Generate Terraform plan (only on pull requests)
+     # Step 7: Generate Terraform plan (only on pull requests)
      - name: Terraform Plan
        id: plan
        if: github.event_name == 'pull_request'
        run: terraform plan -no-color
        continue-on-error: true
 
-     # Step 7: Add comments to pull request
+     # Step 8: Add comments to pull request
      - name: Update Pull Request
        uses: actions/github-script@v6
        if: github.event_name == 'pull_request'
@@ -100,7 +115,7 @@ jobs:
              body: output
            })
 
-     # Step 8: Apply Terraform changes based on branch
+     # Step 9: Apply Terraform changes based on branch
      - name: Terraform Apply
        if: github.event_name == 'push' # Only execute on push events
        run: |
