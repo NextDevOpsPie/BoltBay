@@ -56,6 +56,10 @@ jobs:
         run: terraform fmt -check
         continue-on-error: true # Continue even if formatting check fails
 
+      - name: Ensure Terraform Workspace Exists
+        run: |
+          terraform workspace list | grep -q "\b${TF_WORKSPACE}\b" || terraform workspace new ${TF_WORKSPACE}
+
       # Step 4: Initialize Terraform working directory
       - name: Terraform Init
         id: init
