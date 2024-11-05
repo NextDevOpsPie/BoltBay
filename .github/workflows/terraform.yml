@@ -79,15 +79,15 @@ jobs:
         id: init
         run: terraform init -input=false -reconfigure
 
-      # Step 5: Set TF_WORKSPACE after initialization
+     # Step 6: Set TF_WORKSPACE after initialization
       - name: Set TF_WORKSPACE
         run: |
           echo "TF_WORKSPACE=${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/production' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}" >> $GITHUB_ENV
 
-      # Step 6: Ensure Terraform Workspace Exists and Select It
+     # Step 7: Ensure Terraform Workspace Exists and Select It
       - name: Ensure Terraform Workspace Exists
         run: |
-          terraform workspace list | grep -q "\b${TF_WORKSPACE}\b" || terraform workspace new ${TF_WORKSPACE}
+          terraform workspace list | grep -q "^${TF_WORKSPACE}$" || terraform workspace new ${TF_WORKSPACE}
           terraform workspace select ${TF_WORKSPACE}
 
       # Step 5: Validate Terraform configuration
