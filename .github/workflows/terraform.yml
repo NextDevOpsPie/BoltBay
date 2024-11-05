@@ -1,0 +1,172 @@
+# Terraform CI/CD workflow for infrastructure management
+name: 'Terraform CI/CD'
+
+# Define workflow triggers
+on:
+  push: # Trigger on push events
+    branches: # Only for these branches
+      - develop
+      - staging
+      - main
+    paths: # Only when changes occur in infrastructure directory
+      - 'infrastructure/**'
+  pull_request: # Trigger on pull request events
+    branches: # For PRs targeting these branches
+      - develop
+      - staging
+      - main
+    paths:
+      - 'infrastructure/**'
+
+# Define jobs
+jobs:
+  terraform:
+    name: 'Terraform'
+    runs-on: ubuntu-latest # Use latest Ubuntu runner
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    # Environment variables configuration
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }} # AWS credentials
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ap-southeast-2 # AWS region
+      # Set workspace based on branch
+      TF_WORKSPACE: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}
+
+    # Set default working directory based on branch
+    defaults:
+      run:
+        working-directory: infrastructure/environments/${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}
+
+    # Define step-by-step actions
+    steps:
+      # Step 1: Check out repository code
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # Step 2: Install and configure Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.9.8 # Specify Terraform version
+
+      # Step 3: Check Terraform formatting
+      - name: Terraform Format
+        run: terraform fmt -check -recursive
+        continue-on-error: true # Continue even if formatting check fails
+
+      # Step 4: Initialize Terraform
+      - name: Terraform Init
+        id: init
+        run: |
+          terraform init -input=false
+          echo "Workspace: ${TF_WORKSPACE}"
+
+      # Step 5: Setup Terraform Workspace
+      - name: Setup Terraform Workspace
+        run: |
+          # List existing workspaces
+          WORKSPACES=$(terraform workspace list)
+
+          # Check if target workspace exists
+          if echo "$WORKSPACES" | grep -q " ${TF_WORKSPACE}"; then
+            echo "Workspace ${TF_WORKSPACE} already exists"
+          else
+            echo "Creating new workspace: ${TF_WORKSPACE}"
+            terraform workspace new ${TF_WORKSPACE}
+          fi
+
+          echo "Current workspace: $(terraform workspace show)"
+
+      # Step 6: Validate Terraform configuration
+      - name: Terraform Validate
+        id: validate
+        run: |
+          if terraform validate -no-color; then
+            echo "status=valid" >> $GITHUB_OUTPUT
+            echo "message=Success! The configuration is valid." >> $GITHUB_OUTPUT
+          else
+            echo "status=invalid" >> $GITHUB_OUTPUT
+            echo "message=Error! The configuration is invalid." >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      # Step 7: Generate Terraform plan (only on pull requests)
+      - name: Terraform Plan
+        id: plan
+        if: github.event_name == 'pull_request'
+        run: |
+          # Capture the plan output
+          PLAN_OUTPUT=$(terraform plan -no-color)
+          echo "plan_output<<EOF" >> $GITHUB_OUTPUT
+          echo "$PLAN_OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Set the exit code
+          if [ $? -eq 0 ]; then
+            echo "exit_code=0" >> $GITHUB_OUTPUT
+          else
+            echo "exit_code=1" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+
+      # Step 8: Add comments to pull request (updated syntax)
+      - name: Update Pull Request
+        uses: actions/github-script@v6
+        if: github.event_name == 'pull_request'
+        env:
+          PLAN_OUTPUT: ${{ steps.plan.outputs.plan_output }}
+          VALIDATE_STATUS: ${{ steps.validate.outputs.status }}
+          VALIDATE_MESSAGE: ${{ steps.validate.outputs.message }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              const output = [
+                '#### Terraform Format and Style 🖌',
+                '#### Terraform Initialization ⚙️',
+                '#### Terraform Validation 🤖',
+                '',
+                `**${process.env.VALIDATE_MESSAGE}**`,
+                '',
+                '#### Terraform Plan 📖',
+                '<details><summary>Show Plan</summary>',
+                '',
+                '```hcl',
+                process.env.PLAN_OUTPUT,
+                '```',
+                '',
+                '</details>',
+                '',
+                `*Pushed by: @${context.actor}, Environment: \`${process.env.TF_WORKSPACE}\`*`
+              ].join('\n');
+
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              });
+            } catch (error) {
+              console.log('Error posting comment:', error);
+              throw error;
+            }
+
+      # Step 9: Apply Terraform changes based on branch
+      - name: Terraform Apply
+        if: github.event_name == 'push' # Only execute on push events
+        run: |
+          # Apply changes based on the target branch
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "Applying changes to MAIN (PRODUCTION)"
+            terraform apply -auto-approve
+          elif [[ "${{ github.ref }}" == "refs/heads/staging" ]]; then
+            echo "Applying changes to STAGING environment"
+            terraform apply -auto-approve
+          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            echo "Applying changes to DEV environment"
+            terraform apply -auto-approve
+          fi
