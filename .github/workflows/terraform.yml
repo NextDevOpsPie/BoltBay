@@ -1,18 +1,16 @@
-# Terraform CI/CD workflow for infrastructure management
 name: 'Terraform CI/CD'
 
-# Define workflow triggers
 on:
-  push: # Trigger on push events
-    branches: # Only for these branches
+  push:
+    branches:
       - develop
       - staging
       - production
       - main
-    paths: # Only when changes occur in infrastructure directory
+    paths:
       - 'infrastructure/**'
-  pull_request: # Trigger on pull request events
-    branches: # For PRs targeting these branches
+  pull_request:
+    branches:
       - develop
       - staging
       - production
@@ -20,7 +18,6 @@ on:
     paths:
       - 'infrastructure/**'
 
-# Define workflow jobs
 jobs:
   terraform:
     name: 'Terraform'
@@ -42,7 +39,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
         with:
-          terraform_version: 1.5.6
+          terraform_version: 1.5.6  # Update to the latest stable version
 
       - name: Terraform Format
         id: fmt
@@ -56,19 +53,13 @@ jobs:
         id: init
         run: terraform init -input=false -reconfigure
 
-      # Remove this step that sets TF_WORKSPACE
-      # - name: Set Terraform Workspace
-      #   run: echo "TF_WORKSPACE=dev" >> $GITHUB_ENV
-
-      # Add this step to set WORKSPACE_NAME
       - name: Set Workspace Name
         run: |
           echo "WORKSPACE_NAME=${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/production' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}" >> $GITHUB_ENV
 
-      - name: Ensure Terraform Workspace Exists
+      - name: Select or Create Terraform Workspace
         run: |
-          terraform workspace list | grep -q "^${WORKSPACE_NAME}$" || terraform workspace new ${WORKSPACE_NAME}
-          terraform workspace select ${WORKSPACE_NAME}
+          terraform workspace select "${WORKSPACE_NAME}" || terraform workspace new "${WORKSPACE_NAME}"
 
       - name: Terraform Validate
         id: validate
@@ -80,7 +71,6 @@ jobs:
         run: terraform plan -no-color
         continue-on-error: true
 
-      # Step 7: Add comments to pull request
       - name: Update Pull Request
         uses: actions/github-script@v6
         if: github.event_name == 'pull_request'
@@ -89,24 +79,22 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            # Generate comment content with execution results
             const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
             #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
             #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
             #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
 
-            *Pushed by: @${{ github.actor }}, Environment: \`${process.env.TF_WORKSPACE}\`*`;
+            *Pushed by: @${{ github.actor }}, Environment: \`${process.env.WORKSPACE_NAME}\`*`;
 
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: output
-            })
+            });
 
-      # Step 8: Apply Terraform changes based on branch
       - name: Terraform Apply
-        if: github.event_name == 'push' # Only execute on push events
+        if: github.event_name == 'push'
         run: |
           # Apply changes based on the target branch
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
