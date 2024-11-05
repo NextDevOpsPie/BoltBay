@@ -4,7 +4,7 @@ variable "environment" {
   type        = string
   default     = "dev"
   description = "Environment name"
-  
+
   validation {
     condition     = contains(["dev", "staging", "prod"], var.environment)
     error_message = "Environment must be dev, staging, or prod."
@@ -28,7 +28,7 @@ variable "vpc_cidr" {
   type        = string
   default     = "10.0.0.0/16"
   description = "CIDR block for VPC"
-  
+
   validation {
     condition     = can(cidrhost(var.vpc_cidr, 0))
     error_message = "Must be a valid VPC CIDR block."

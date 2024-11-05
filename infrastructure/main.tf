@@ -32,7 +32,7 @@ module "vpc" {
 
 module "security" {
   source = "./modules/security"
-  
+
   environment = var.environment
   project     = var.project
   vpc_id      = module.vpc.vpc_id
@@ -40,7 +40,7 @@ module "security" {
 
 module "ecs" {
   source = "./modules/ecs"
-  
+
   environment = var.environment
   project     = var.project
   vpc_id      = module.vpc.vpc_id
@@ -49,7 +49,7 @@ module "ecs" {
 
 module "s3" {
   source = "./modules/s3"
-  
+
   environment = var.environment
   project     = var.project
 }
