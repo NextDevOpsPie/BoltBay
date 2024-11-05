@@ -65,10 +65,19 @@ jobs:
       #   run: |
       #     terraform workspace list | grep -q "\b${TF_WORKSPACE}\b" || terraform workspace new ${TF_WORKSPACE}
 
-      # Step 4: Initialize Terraform working directory without TF_WORKSPACE
+      # # Step 4: Initialize Terraform working directory without TF_WORKSPACE
+      # - name: Terraform Init
+      #   id: init
+      #   run: terraform init -input=false
+
+      # Step 4: Clean up any existing Terraform directories
+      - name: Clean .terraform directory
+        run: rm -rf .terraform
+
+      # Step 5: Initialize Terraform working directory
       - name: Terraform Init
         id: init
-        run: terraform init -input=false
+        run: terraform init -input=false -reconfigure
 
       # Step 5: Set TF_WORKSPACE after initialization
       - name: Set TF_WORKSPACE
