@@ -79,8 +79,6 @@ jobs:
             terraform workspace new ${TF_WORKSPACE}
           fi
 
-          # Select the workspace
-          terraform workspace select ${TF_WORKSPACE}
           echo "Current workspace: $(terraform workspace show)"
 
       # Step 6: Validate Terraform configuration
@@ -123,7 +121,6 @@ jobs:
           PLAN_OUTPUT: ${{ steps.plan.outputs.plan_output }}
           VALIDATE_STATUS: ${{ steps.validate.outputs.status }}
           VALIDATE_MESSAGE: ${{ steps.validate.outputs.message }}
-          TF_WORKSPACE: ${{ env.TF_WORKSPACE }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
