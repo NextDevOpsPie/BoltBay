@@ -14,7 +14,7 @@ provider "aws" {
 # S3 bucket for Terraform state
 resource "aws_s3_bucket" "terraform_state" {
   bucket = "boltbay-infra-tfstate"
-  
+
   lifecycle {
     prevent_destroy = true
   }
