@@ -61,13 +61,17 @@ jobs:
           TF_WORKSPACE: default # Ensure TF_WORKSPACE is set to default
         run: terraform init -input=false -reconfigure
 
-      - name: Set Workspace Name
+      # Step: Set TF_WORKSPACE after initialization
+      - name: Set TF_WORKSPACE
         run: |
-          echo "WORKSPACE_NAME=${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/production' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}" >> $GITHUB_ENV
+          echo "TF_WORKSPACE=${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/production' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}" >> $GITHUB_ENV
+
+      # Step: Ensure Terraform Workspace Exists and Select It
       - name: Ensure Terraform Workspace Exists
         run: |
-          terraform workspace list | grep -q "^${WORKSPACE_NAME}$" || terraform workspace new ${WORKSPACE_NAME}
-          terraform workspace select ${WORKSPACE_NAME}
+          terraform workspace list | grep -q "^${TF_WORKSPACE}$" || terraform workspace new ${TF_WORKSPACE}
+          terraform workspace select ${TF_WORKSPACE}
+
       - name: Terraform Validate
         id: validate
         run: terraform validate
