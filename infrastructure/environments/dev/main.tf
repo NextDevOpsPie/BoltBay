@@ -1,20 +1,45 @@
-# Call VPC module
+# infrastructure/environments/dev/main.tf
+
+# VPC Module - Base networking infrastructure
 module "vpc" {
   source = "../../modules/vpc"
 
-  environment = var.environment
-  vpc_cidr    = "10.0.0.0/16"
-  
-  public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
-  private_subnet_cidrs = ["10.0.4.0/24", "10.0.5.0/24", "10.0.6.0/24"]
+  environment         = var.environment
+  vpc_cidr           = var.vpc_cidr
+  public_subnet_cidrs = var.public_subnet_cidrs
+  private_subnet_cidrs = var.private_subnet_cidrs
+
+  tags = {
+    Description = "Main VPC for ${var.environment} environment"
+  }
 }
 
-# Call Security module
+# Security Module - Network security groups
 module "security" {
   source = "../../modules/security"
   
   environment = var.environment
   vpc_id      = module.vpc.vpc_id
+
+  depends_on = [module.vpc]
+
+  tags = {
+    Description = "Security groups for ${var.environment} environment"
+  }
 }
 
-# Add additional module calls as needed
+# Outputs for important resource information
+output "vpc_id" {
+  value       = module.vpc.vpc_id
+  description = "ID of the created VPC"
+}
+
+output "public_subnet_ids" {
+  value       = module.vpc.public_subnet_ids
+  description = "IDs of the public subnets"
+}
+
+output "private_subnet_ids" {
+  value       = module.vpc.private_subnet_ids
+  description = "IDs of the private subnets"
+}
