@@ -26,7 +26,6 @@ jobs:
     name: 'Terraform'
     runs-on: ubuntu-latest
 
-    # Remove TF_WORKSPACE from job-level env
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -43,42 +42,38 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
         with:
-          terraform_version: 1.0.0
+          terraform_version: 1.5.6
 
       - name: Terraform Format
         id: fmt
         run: terraform fmt -check
         continue-on-error: true
 
-      # Step: Clean up any existing Terraform directories
       - name: Clean .terraform directory
         run: rm -rf .terraform
 
-      # Step: Unset TF_WORKSPACE and Initialize Terraform
       - name: Terraform Init
         id: init
-        env:
-          TF_WORKSPACE: default # Ensure TF_WORKSPACE is set to default
         run: terraform init -input=false -reconfigure
 
-      # Step: Set TF_WORKSPACE after initialization
-      - name: Set TF_WORKSPACE
-        run: |
-          echo "TF_WORKSPACE=${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/production' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}" >> $GITHUB_ENV
+      # Remove this step that sets TF_WORKSPACE
+      # - name: Set Terraform Workspace
+      #   run: echo "TF_WORKSPACE=dev" >> $GITHUB_ENV
 
-      # Step: Ensure Terraform Workspace Exists and Select It
+      # Add this step to set WORKSPACE_NAME
+      - name: Set Workspace Name
+        run: |
+          echo "WORKSPACE_NAME=${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/production' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}" >> $GITHUB_ENV
+
       - name: Ensure Terraform Workspace Exists
         run: |
-          terraform workspace list | grep -q "^${TF_WORKSPACE}$" || terraform workspace new ${TF_WORKSPACE}
-          terraform workspace select ${TF_WORKSPACE}
+          terraform workspace list | grep -q "^${WORKSPACE_NAME}$" || terraform workspace new ${WORKSPACE_NAME}
+          terraform workspace select ${WORKSPACE_NAME}
 
       - name: Terraform Validate
         id: validate
         run: terraform validate
 
-      # ... [rest of your steps]
-
-      # Step 6: Generate Terraform plan (only on pull requests)
       - name: Terraform Plan
         id: plan
         if: github.event_name == 'pull_request'
