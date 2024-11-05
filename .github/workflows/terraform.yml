@@ -61,9 +61,9 @@ jobs:
         id: init
         run: terraform init -input=false
 
-      # - name: Ensure Terraform Workspace Exists
-      #   run: |
-      #     terraform workspace list | grep -q "\b${TF_WORKSPACE}\b" || terraform workspace new ${TF_WORKSPACE}
+      - name: Ensure Terraform Workspace Exists
+        run: |
+          terraform workspace list | grep -q "\b${TF_WORKSPACE}\b" || terraform workspace new ${TF_WORKSPACE}
 
       # Step 5: Validate Terraform configuration
       - name: Terraform Validate
