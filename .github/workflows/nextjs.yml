@@ -1,18 +1,60 @@
 # .github/workflows/nextjs.yml
-
 name: Next.js CI/CD
 
 on:
   push:
-    branches: [develop, staging, main]
+    branches: [ develop, staging, main ]
     paths:
+      # Project source code
       - 'src/**'
       - 'public/**'
       - 'app/**'
+      
+      # Configuration files
+      - '.env*'
+      - '*.config.js'
+      - '*.config.mjs'
+      - '*.config.json'
+      - '*.config.ts'
+      - 'tsconfig.json'
       - 'package*.json'
-      - '.github/workflows/nextjs.yml'
+      
+      # Code quality configuration
+      - '.prettier*'
+      - '.eslint*'
+      - '.postcss*'
+      
+      # Workflow configuration
+      - '.github/workflows/**'
+      
+      # Other important files
+      - 'next-env.d.ts'
+      - 'tailwind.config.js'
+      - 'postcss.config.js'
+      - 'prettier.config.js'
+      
   pull_request:
-    branches: [develop, staging, main]
+    branches: [ develop, staging, main ]
+    paths:
+      # All paths as above
+      - 'src/**'
+      - 'public/**'
+      - 'app/**'
+      - '.env*'
+      - '*.config.js'
+      - '*.config.mjs'
+      - '*.config.json'
+      - '*.config.ts'
+      - 'tsconfig.json'
+      - 'package*.json'
+      - '.prettier*'
+      - '.eslint*'
+      - '.postcss*'
+      - '.github/workflows/**'
+      - 'next-env.d.ts'
+      - 'tailwind.config.js'
+      - 'postcss.config.js'
+      - 'prettier.config.js'
 
 env:
   NODE_VERSION: 20.9.0
