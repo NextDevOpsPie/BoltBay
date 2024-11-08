@@ -3,13 +3,13 @@ name: Next.js CI/CD
 
 on:
   push:
-    branches: [ develop, staging, main ]
+    branches: [develop, staging, main]
     paths:
       # Project source code
       - 'src/**'
       - 'public/**'
       - 'app/**'
-      
+
       # Configuration files
       - '.env*'
       - '*.config.js'
@@ -18,23 +18,23 @@ on:
       - '*.config.ts'
       - 'tsconfig.json'
       - 'package*.json'
-      
+
       # Code quality configuration
       - '.prettier*'
       - '.eslint*'
       - '.postcss*'
-      
+
       # Workflow configuration
       - '.github/workflows/**'
-      
+
       # Other important files
       - 'next-env.d.ts'
       - 'tailwind.config.js'
       - 'postcss.config.js'
       - 'prettier.config.js'
-      
+
   pull_request:
-    branches: [ develop, staging, main ]
+    branches: [develop, staging, main]
     paths:
       # All paths as above
       - 'src/**'
@@ -115,7 +115,6 @@ jobs:
           path: .next
           retention-days: 1
 
-  # 这里先添加一个简单的部署 job，后续再扩展
   deploy:
     name: Deploy
     needs: test-and-build
@@ -123,32 +122,102 @@ jobs:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/develop')
 
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Download Build Artifact
         uses: actions/download-artifact@v3
         with:
           name: build-output
           path: .next
 
-      - name: Deploy to Development
-        if: github.ref == 'refs/heads/develop'
-        run: |
-          echo "Deploying to development environment..."
-          # 部署命令将在后续添加
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-southeast-2
 
-      - name: Deploy to Staging
-        if: github.ref == 'refs/heads/staging'
-        run: |
-          echo "Deploying to staging environment..."
-          # 部署命令将在后续添加
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
 
-      - name: Deploy to Production
-        if: github.ref == 'refs/heads/main'
+      - name: Build and Push Docker Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: boltbay-nextjs
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          echo "Deploying to production environment..."
-          # 部署命令将在后续添加
+          # Select the correct Dockerfile and environment variables based on branch
+          if [[ ${{ github.ref }} == 'refs/heads/main' ]]; then
+            DOCKERFILE="Dockerfile"
+            ENV="prod"
+            CLUSTER="boltbay-prod"
+          elif [[ ${{ github.ref }} == 'refs/heads/staging' ]]; then
+            DOCKERFILE="Dockerfile.staging"
+            ENV="staging"
+            CLUSTER="boltbay-staging"
+          else
+            DOCKERFILE="Dockerfile.dev"
+            ENV="dev"
+            CLUSTER="boltbay-dev"
+          fi
+
+          # Build and push Docker image
+          docker build -f $DOCKERFILE \
+            --build-arg NODE_ENV=$ENV \
+            --build-arg NODE_VERSION=${{ env.NODE_VERSION }} \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$ENV-$IMAGE_TAG \
+            .
+            
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$ENV-$IMAGE_TAG
+
+          # Push latest tag for rollback convenience
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$ENV-$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$ENV-latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$ENV-latest
+
+      - name: Update ECS Service
+        run: |
+          if [[ ${{ github.ref }} == 'refs/heads/main' ]]; then
+            CLUSTER="boltbay-prod"
+            SERVICE="nextjs-prod"
+          elif [[ ${{ github.ref }} == 'refs/heads/staging' ]]; then
+            CLUSTER="boltbay-staging"
+            SERVICE="nextjs-staging"
+          else
+            CLUSTER="boltbay-dev"
+            SERVICE="nextjs-dev"
+          fi
+
+          aws ecs update-service \
+            --cluster $CLUSTER \
+            --service $SERVICE \
+            --force-new-deployment
+
+      - name: Wait for Service Stability
+        run: |
+          if [[ ${{ github.ref }} == 'refs/heads/main' ]]; then
+            CLUSTER="boltbay-prod"
+            SERVICE="nextjs-prod"
+          elif [[ ${{ github.ref }} == 'refs/heads/staging' ]]; then
+            CLUSTER="boltbay-staging"
+            SERVICE="nextjs-staging"
+          else
+            CLUSTER="boltbay-dev"
+            SERVICE="nextjs-dev"
+          fi
+
+          aws ecs wait services-stable \
+            --cluster $CLUSTER \
+            --services $SERVICE
 
       - name: Deployment Status Notification
         if: always()
-        run: |
-          echo "Deployment status: ${{ job.status }}"
-          # 后续可以添加 Slack 或其他通知方式
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow,job,took
+          text: |
+            Deployment to ${{ github.ref }} ${{ job.status }}
+            ${{ github.actor }} deployed ${{ github.sha }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
