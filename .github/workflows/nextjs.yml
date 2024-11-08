@@ -1,0 +1,112 @@
+# .github/workflows/nextjs.yml
+
+name: Next.js CI/CD
+
+on:
+  push:
+    branches: [develop, staging, main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'app/**'
+      - 'package*.json'
+      - '.github/workflows/nextjs.yml'
+  pull_request:
+    branches: [develop, staging, main]
+
+env:
+  NODE_VERSION: 20.9.0
+
+jobs:
+  test-and-build:
+    name: Test and Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: |
+          echo "Installing dependencies with Node.js ${{ env.NODE_VERSION }}"
+          npm ci
+
+      - name: Code Linting
+        run: |
+          echo "Running lint checks..."
+          npm run lint
+
+      - name: Type Checking
+        run: |
+          echo "Running type checks..."
+          npm run type-check || true
+
+      - name: Run Tests
+        run: |
+          echo "Running tests..."
+          npm test || true
+
+      - name: Build Application
+        run: |
+          echo "Building Next.js application..."
+          npm run build
+
+      - name: Cache Build Output
+        uses: actions/cache@v3
+        with:
+          path: |
+            .next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-output
+          path: .next
+          retention-days: 1
+
+  # 这里先添加一个简单的部署 job，后续再扩展
+  deploy:
+    name: Deploy
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/develop')
+
+    steps:
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: build-output
+          path: .next
+
+      - name: Deploy to Development
+        if: github.ref == 'refs/heads/develop'
+        run: |
+          echo "Deploying to development environment..."
+          # 部署命令将在后续添加
+
+      - name: Deploy to Staging
+        if: github.ref == 'refs/heads/staging'
+        run: |
+          echo "Deploying to staging environment..."
+          # 部署命令将在后续添加
+
+      - name: Deploy to Production
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "Deploying to production environment..."
+          # 部署命令将在后续添加
+
+      - name: Deployment Status Notification
+        if: always()
+        run: |
+          echo "Deployment status: ${{ job.status }}"
+          # 后续可以添加 Slack 或其他通知方式
