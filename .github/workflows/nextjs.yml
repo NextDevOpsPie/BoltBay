@@ -82,7 +82,8 @@ jobs:
       - name: Code Linting
         run: |
           echo "Running lint checks..."
-          npm run lint
+          npm run lint:check || (echo "Linting failed. Setting up ESLint..." && npx eslint --init --quiet && npm run lint:check)
+
 
       - name: Type Checking
         run: |
