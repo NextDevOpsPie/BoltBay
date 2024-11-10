@@ -79,20 +79,21 @@ jobs:
           echo "Installing dependencies with Node.js ${{ env.NODE_VERSION }}"
           npm ci
 
-      - name: Code Linting
+      - name: Code Quality Checks
         run: |
-          echo "Running lint checks..."
-          npm run lint
+          echo "Running lint and format checks..."
+          npm run lint:check
+          npm run format:check
 
       - name: Type Checking
         run: |
           echo "Running type checks..."
-          npm run type-check || true
+          npm run type-check
 
       - name: Run Tests
         run: |
           echo "Running tests..."
-          npm test || true
+          npm run test || true
 
       - name: Build Application
         run: |
@@ -131,6 +132,13 @@ jobs:
           name: build-output
           path: .next
 
+      - name: Verify Required Secrets
+        run: |
+          if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then
+            echo "Error: AWS_ROLE_ARN is not set"
+            exit 1
+          fi
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -147,19 +155,22 @@ jobs:
           ECR_REPOSITORY: boltbay-nextjs
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          # Select the correct Dockerfile and environment variables based on branch
+          # Select the correct Dockerfile
           if [[ ${{ github.ref }} == 'refs/heads/main' ]]; then
             DOCKERFILE="Dockerfile"
             ENV="prod"
-            CLUSTER="boltbay-prod"
           elif [[ ${{ github.ref }} == 'refs/heads/staging' ]]; then
             DOCKERFILE="Dockerfile.staging"
             ENV="staging"
-            CLUSTER="boltbay-staging"
           else
             DOCKERFILE="Dockerfile.dev"
             ENV="dev"
-            CLUSTER="boltbay-dev"
+          fi
+
+          # Check if Dockerfile exists
+          if [[ ! -f "$DOCKERFILE" ]]; then
+            echo "Error: $DOCKERFILE not found"
+            exit 1
           fi
 
           # Build and push Docker image
@@ -212,12 +223,7 @@ jobs:
 
       - name: Deployment Status Notification
         if: always()
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          fields: repo,message,commit,author,action,eventName,ref,workflow,job,took
-          text: |
-            Deployment to ${{ github.ref }} ${{ job.status }}
-            ${{ github.actor }} deployed ${{ github.sha }}
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          echo "Deployment to ${{ github.ref }} completed with status: ${{ job.status }}"
+          echo "Deployed by: ${{ github.actor }}"
+          echo "Commit: ${{ github.sha }}"
