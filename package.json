@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint --fix",
-    "lint:check": "next lint"
+    "lint:check": "next lint",
+    "type-check": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "echo \"No tests specified\""
   },
   "dependencies": {
     "@headlessui/react": "^2.1.1",
