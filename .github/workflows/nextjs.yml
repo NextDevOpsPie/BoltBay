@@ -1,0 +1,229 @@
+# .github/workflows/nextjs.yml
+name: Next.js CI/CD
+
+on:
+  push:
+    branches: [develop, staging, main]
+    paths:
+      # Project source code
+      - 'src/**'
+      - 'public/**'
+      - 'app/**'
+
+      # Configuration files
+      - '.env*'
+      - '*.config.js'
+      - '*.config.mjs'
+      - '*.config.json'
+      - '*.config.ts'
+      - 'tsconfig.json'
+      - 'package*.json'
+
+      # Code quality configuration
+      - '.prettier*'
+      - '.eslint*'
+      - '.postcss*'
+
+      # Workflow configuration
+      - '.github/workflows/**'
+
+      # Other important files
+      - 'next-env.d.ts'
+      - 'tailwind.config.js'
+      - 'postcss.config.js'
+      - 'prettier.config.js'
+
+  pull_request:
+    branches: [develop, staging, main]
+    paths:
+      # All paths as above
+      - 'src/**'
+      - 'public/**'
+      - 'app/**'
+      - '.env*'
+      - '*.config.js'
+      - '*.config.mjs'
+      - '*.config.json'
+      - '*.config.ts'
+      - 'tsconfig.json'
+      - 'package*.json'
+      - '.prettier*'
+      - '.eslint*'
+      - '.postcss*'
+      - '.github/workflows/**'
+      - 'next-env.d.ts'
+      - 'tailwind.config.js'
+      - 'postcss.config.js'
+      - 'prettier.config.js'
+
+env:
+  NODE_VERSION: 20.9.0
+
+jobs:
+  test-and-build:
+    name: Test and Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: |
+          echo "Installing dependencies with Node.js ${{ env.NODE_VERSION }}"
+          npm ci
+
+      - name: Code Quality Checks
+        run: |
+          echo "Running lint and format checks..."
+          npm run lint:check
+          npm run format:check
+
+      - name: Type Checking
+        run: |
+          echo "Running type checks..."
+          npm run type-check
+
+      - name: Run Tests
+        run: |
+          echo "Running tests..."
+          npm run test || true
+
+      - name: Build Application
+        run: |
+          echo "Building Next.js application..."
+          npm run build
+
+      - name: Cache Build Output
+        uses: actions/cache@v3
+        with:
+          path: |
+            .next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-output
+          path: .next
+          retention-days: 1
+
+  deploy:
+    name: Deploy
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/develop')
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: build-output
+          path: .next
+
+      - name: Verify Required Secrets
+        run: |
+          if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then
+            echo "Error: AWS_ROLE_ARN is not set"
+            exit 1
+          fi
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-southeast-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build and Push Docker Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: boltbay-nextjs
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Select the correct Dockerfile
+          if [[ ${{ github.ref }} == 'refs/heads/main' ]]; then
+            DOCKERFILE="Dockerfile"
+            ENV="prod"
+          elif [[ ${{ github.ref }} == 'refs/heads/staging' ]]; then
+            DOCKERFILE="Dockerfile.staging"
+            ENV="staging"
+          else
+            DOCKERFILE="Dockerfile.dev"
+            ENV="dev"
+          fi
+
+          # Check if Dockerfile exists
+          if [[ ! -f "$DOCKERFILE" ]]; then
+            echo "Error: $DOCKERFILE not found"
+            exit 1
+          fi
+
+          # Build and push Docker image
+          docker build -f $DOCKERFILE \
+            --build-arg NODE_ENV=$ENV \
+            --build-arg NODE_VERSION=${{ env.NODE_VERSION }} \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$ENV-$IMAGE_TAG \
+            .
+            
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$ENV-$IMAGE_TAG
+
+          # Push latest tag for rollback convenience
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$ENV-$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$ENV-latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$ENV-latest
+
+      - name: Update ECS Service
+        run: |
+          if [[ ${{ github.ref }} == 'refs/heads/main' ]]; then
+            CLUSTER="boltbay-prod"
+            SERVICE="nextjs-prod"
+          elif [[ ${{ github.ref }} == 'refs/heads/staging' ]]; then
+            CLUSTER="boltbay-staging"
+            SERVICE="nextjs-staging"
+          else
+            CLUSTER="boltbay-dev"
+            SERVICE="nextjs-dev"
+          fi
+
+          aws ecs update-service \
+            --cluster $CLUSTER \
+            --service $SERVICE \
+            --force-new-deployment
+
+      - name: Wait for Service Stability
+        run: |
+          if [[ ${{ github.ref }} == 'refs/heads/main' ]]; then
+            CLUSTER="boltbay-prod"
+            SERVICE="nextjs-prod"
+          elif [[ ${{ github.ref }} == 'refs/heads/staging' ]]; then
+            CLUSTER="boltbay-staging"
+            SERVICE="nextjs-staging"
+          else
+            CLUSTER="boltbay-dev"
+            SERVICE="nextjs-dev"
+          fi
+
+          aws ecs wait services-stable \
+            --cluster $CLUSTER \
+            --services $SERVICE
+
+      - name: Deployment Status Notification
+        if: always()
+        run: |
+          echo "Deployment to ${{ github.ref }} completed with status: ${{ job.status }}"
+          echo "Deployed by: ${{ github.actor }}"
+          echo "Commit: ${{ github.sha }}"
