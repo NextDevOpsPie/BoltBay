@@ -1,3 +1,4 @@
+# infrastructure/bootstrap/main.tf
 terraform {
   required_providers {
     aws = {
@@ -71,7 +72,7 @@ resource "aws_iam_openid_connect_provider" "github_actions" {
   ]
 }
 
-# Create IAM Role for GitHub Actions
+# Create IAM Role for GitHub Actionsn 
 resource "aws_iam_role" "github_actions" {
   name = "github-actions-role"
 
@@ -113,4 +114,100 @@ resource "aws_iam_role_policy_attachment" "github_actions_ecs" {
 output "github_actions_role_arn" {
   description = "GitHub Actions IAM Role ARN"
   value       = aws_iam_role.github_actions.arn
+}
+
+# ECR Repository
+resource "aws_ecr_repository" "nextjs" {
+  name = "boltbay-nextjs"
+  
+  image_tag_mutability = "MUTABLE"
+  
+  force_delete = true  # Allows for repository deletion during development
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
+# ECR Lifecycle Policy
+resource "aws_ecr_lifecycle_policy" "nextjs" {
+  repository = aws_ecr_repository.nextjs.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep the last 30 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 30
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}
+
+# ECS Clusters
+resource "aws_ecs_cluster" "dev" {
+  name = "boltbay-dev"
+
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
+
+  tags = {
+    Environment = "dev"
+  }
+}
+
+resource "aws_ecs_cluster" "staging" {
+  name = "boltbay-staging"
+
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
+
+  tags = {
+    Environment = "staging"
+  }
+}
+
+resource "aws_ecs_cluster" "prod" {
+  name = "boltbay-prod"
+
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
+
+  tags = {
+    Environment = "prod"
+  }
+}
+
+# Outputs
+output "ecr_repository_url" {
+  description = "ECR Repository URL"
+  value       = aws_ecr_repository.nextjs.repository_url
+}
+
+output "ecs_cluster_dev_arn" {
+  description = "Development ECS Cluster ARN"
+  value       = aws_ecs_cluster.dev.arn
+}
+
+output "ecs_cluster_staging_arn" {
+  description = "Staging ECS Cluster ARN"
+  value       = aws_ecs_cluster.staging.arn
+}
+
+output "ecs_cluster_prod_arn" {
+  description = "Production ECS Cluster ARN"
+  value       = aws_ecs_cluster.prod.arn
 }

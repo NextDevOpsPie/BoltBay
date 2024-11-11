@@ -3,20 +3,20 @@ FROM node:20.9.0-alpine
 
 WORKDIR /app
 
-# 安装开发工具和依赖
+# Install development tools and dependencies
 RUN apk add --no-cache git
 
-# 复制 package.json 和 package-lock.json
+# Copy package.json and package-lock.json
 COPY package*.json ./
 
-# 安装项目依赖（包括开发依赖）
+# Install project dependencies (including dev dependencies)
 RUN npm install
 
-# 复制项目文件
+# Copy project files
 COPY . .
 
-# 暴露开发服务器端口
+# Expose development server port
 EXPOSE 3000
 
-# 启动开发模式
+# Start in development mode
 CMD ["npm", "run", "dev"]
